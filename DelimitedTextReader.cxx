@@ -12,14 +12,15 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderer.h>
 #include <vtkVertexGlyphFilter.h>
+#include <vtkXMLPolyDataWriter.h>
  
 int main(int argc, char* argv[])
 {
   // Verify input arguments
-  if(argc != 2)
+  if(argc != 3)
     {
     std::cout << "Usage: " << argv[0]
-              << " Filename(.xyz)" << std::endl;
+              << " Filename(.xyz) Outputfile(.vtp)" << std::endl;
     return EXIT_FAILURE;
     }
  
@@ -36,10 +37,11 @@ int main(int argc, char* argv[])
  
   vtkSmartPointer<vtkPoints> points =
     vtkSmartPointer<vtkPoints>::New();
-  vtkSmartPointer<vtkDoubleArray> normals =
-    vtkSmartPointer<vtkDoubleArray>::New();
- 
-  normals->SetNumberOfComponents(3); //3d normals (ie x,y,z)
+//  vtkSmartPointer<vtkDoubleArray> normals =
+//    vtkSmartPointer<vtkDoubleArray>::New();
+  vtkSmartPointer<vtkUnsignedCharArray> colors =
+    vtkSmartPointer<vtkUnsignedCharArray>::New();
+  colors->SetNumberOfComponents(3); //3d normals (ie x,y,z)
  
   std::cout << "Table has " << table->GetNumberOfRows()
             << " rows." << std::endl;
@@ -48,21 +50,22 @@ int main(int argc, char* argv[])
  
   for(vtkIdType i = 0; i < table->GetNumberOfRows(); i++)
     {
-    std::cout << "x: " << (table->GetValue(i,0)).ToDouble()
-              << " y: " << (table->GetValue(i,1)).ToDouble()
-              << " z: " << (table->GetValue(i,2)).ToDouble();
+      // logs x, y, and z, then adds them to an array called points
+    std::cout << "(x, y, z): " << (table->GetValue(i,0)).ToDouble() << ", "
+              << (table->GetValue(i,1)).ToDouble() << ", "
+              << (table->GetValue(i,2)).ToDouble() << " "
+              << "(r, g, b): " << (table->GetValue(i,4)).ToDouble() << " "
+              << (table->GetValue(i,5)).ToDouble() << " "
+              << (table->GetValue(i,6)).ToDouble() << std::endl;
  
     points->InsertNextPoint((table->GetValue(i,0)).ToDouble(),
                             (table->GetValue(i,1)).ToDouble(),
                             (table->GetValue(i,2)).ToDouble());
- 
-    double n[3];
-    n[0] = (table->GetValue(i,4)).ToDouble();
-    n[1] = (table->GetValue(i,5)).ToDouble();
-    n[2] = (table->GetValue(i,6)).ToDouble();
- 
-    std::cout << " (r,g,b): " << n[0] << " " << n[1] << " " << n[2] << std::endl;
-    normals->InsertNextTuple(n);
+    unsigned char pcol[3] = {(table->GetValue(i,4)).ToDouble(),
+                             (table->GetValue(i,5)).ToDouble(),
+                             (table->GetValue(i,6)).ToDouble()};
+
+    colors->InsertNextTupleValue(pcol);
     }
  
   std::cout << "There are " << points->GetNumberOfPoints()
@@ -71,8 +74,15 @@ int main(int argc, char* argv[])
   vtkSmartPointer<vtkPolyData> polydata =
     vtkSmartPointer<vtkPolyData>::New();
   polydata->SetPoints(points);
-  polydata->GetPointData()->SetColor(normals);
- 
+
+  // Setup colors
+
+
+
+    colors->SetNumberOfComponents(3);
+    colors->SetName ("Colors");
+    polydata->GetPointData()->SetScalars(colors);
+
   vtkSmartPointer<vtkVertexGlyphFilter> glyphFilter =
     vtkSmartPointer<vtkVertexGlyphFilter>::New();
 #if VTK_MAJOR_VERSION <= 5
@@ -81,32 +91,48 @@ int main(int argc, char* argv[])
   glyphFilter->SetInputData(polydata);
 #endif
   glyphFilter->Update();
+
+  // Write the file
+   vtkSmartPointer<vtkXMLPolyDataWriter> writer =
+     vtkSmartPointer<vtkXMLPolyDataWriter>::New();
+   writer->SetFileName(argv[2]);
+ #if VTK_MAJOR_VERSION <= 5
+   writer->SetInput(polydata);
+ #else
+   writer->SetInputData(polydata);
+ #endif
+  // Optional - set the mode. The default is binary.
+   //writer->SetDataModeToBinary();
+   //writer->SetDataModeToAscii();
+
+     writer->Write();
+
+
+//  // Visualize
+//  vtkSmartPointer<vtkPolyDataMapper> mapper =
+//    vtkSmartPointer<vtkPolyDataMapper>::New();
+//  mapper->SetInputConnection(glyphFilter->GetOutputPort());
  
-  // Visualize
-  vtkSmartPointer<vtkPolyDataMapper> mapper =
-    vtkSmartPointer<vtkPolyDataMapper>::New();
-  mapper->SetInputConnection(glyphFilter->GetOutputPort());
+//  vtkSmartPointer<vtkActor> actor =
+//    vtkSmartPointer<vtkActor>::New();
+//  actor->SetMapper(mapper);
+//  actor->GetProperty()->SetPointSize(3);
+//  actor->GetProperty()->SetColor(1,0,0);
  
-  vtkSmartPointer<vtkActor> actor =
-    vtkSmartPointer<vtkActor>::New();
-  actor->SetMapper(mapper);
-  actor->GetProperty()->SetPointSize(3);
-  //actor->GetProperty()->vtkProperty::SetColor(1,1,1);
+//  vtkSmartPointer<vtkRenderer> renderer =
+//    vtkSmartPointer<vtkRenderer>::New();
+//  vtkSmartPointer<vtkRenderWindow> renderWindow =
+//    vtkSmartPointer<vtkRenderWindow>::New();
+//  renderWindow->AddRenderer(renderer);
+//  vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor =
+//    vtkSmartPointer<vtkRenderWindowInteractor>::New();
+//  renderWindowInteractor->SetRenderWindow(renderWindow);
  
-  vtkSmartPointer<vtkRenderer> renderer =
-    vtkSmartPointer<vtkRenderer>::New();
-  vtkSmartPointer<vtkRenderWindow> renderWindow =
-    vtkSmartPointer<vtkRenderWindow>::New();
-  renderWindow->AddRenderer(renderer);
-  vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor =
-    vtkSmartPointer<vtkRenderWindowInteractor>::New();
-  renderWindowInteractor->SetRenderWindow(renderWindow);
+//  renderer->AddActor(actor);
+//  renderer->SetBackground(.2, .2, .2); // Background color green
  
-  renderer->AddActor(actor);
-  renderer->SetBackground(.2, .2, .2); // Background color green
- 
-  renderWindow->Render();
-  renderWindowInteractor->Start();
+//  renderWindow->Render();
+//  renderWindowInteractor->Start();
  
   return EXIT_SUCCESS;
 }
